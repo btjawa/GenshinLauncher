@@ -9,17 +9,16 @@ extern {
     ) -> uintptr_t;
 }
 
-use winapi::{um::{minwinbase::STILL_ACTIVE, winnt::{HANDLE, SECURITY_BUILTIN_DOMAIN_RID, SID_IDENTIFIER_AUTHORITY,
-DOMAIN_ALIAS_RID_ADMINS, PSID}, memoryapi::{ReadProcessMemory, WriteProcessMemory},
+use winapi::{um::{minwinbase::STILL_ACTIVE, winnt::HANDLE, memoryapi::{ReadProcessMemory, WriteProcessMemory},
 processthreadsapi::{CreateProcessA, GetExitCodeProcess, PROCESS_INFORMATION, STARTUPINFOA}, handleapi::CloseHandle,
-tlhelp32::{CreateToolhelp32Snapshot, MODULEENTRY32, PROCESSENTRY32, TH32CS_SNAPPROCESS, Process32First, Process32Next}, psapi::{EnumProcessModules,
-GetModuleInformation, GetModuleFileNameExW, MODULEINFO}, securitybaseapi::{CheckTokenMembership, AllocateAndInitializeSid, FreeSid},
-errhandlingapi::GetLastError, winuser::{RegisterHotKey, GetMessageW, MSG, VK_F8, UnregisterHotKey, mouse_event,
-MOUSEEVENTF_LEFTDOWN, MOUSEEVENTF_LEFTUP, WM_HOTKEY}}, shared::minwindef::{LPVOID, DWORD, HMODULE}, vc::vadefs::uintptr_t};
+tlhelp32::{CreateToolhelp32Snapshot, MODULEENTRY32, PROCESSENTRY32, TH32CS_SNAPPROCESS, Process32First, Process32Next},
+psapi::{EnumProcessModules, GetModuleInformation, GetModuleFileNameExW, MODULEINFO}, errhandlingapi::GetLastError,
+winuser::{RegisterHotKey, GetMessageW, MSG, VK_F8, UnregisterHotKey, mouse_event, MOUSEEVENTF_LEFTDOWN, MOUSEEVENTF_LEFTUP, WM_HOTKEY}},
+shared::minwindef::{LPVOID, DWORD, HMODULE}, vc::vadefs::uintptr_t};
 
 use lazy_static::lazy_static;
-use std::{ffi::{CStr, CString, OsString}, ptr::null_mut, path::PathBuf, os::{raw::c_char, windows::ffi::OsStringExt}, mem,
-panic, process::Command, sync::{Arc, RwLock, Mutex, atomic::{AtomicBool, Ordering}}, thread::{self, sleep}, time::Duration};
+use std::{ffi::{CStr, CString, OsString}, ptr::null_mut, path::PathBuf, os::{raw::c_char, windows::ffi::OsStringExt},
+mem, panic, sync::{Arc, RwLock, Mutex, atomic::{AtomicBool, Ordering}}, thread::{self, sleep}, time::Duration};
 use tauri::{Manager, Window as tWindow};
 
 mod logger;
@@ -33,25 +32,6 @@ fn handle_err<E: std::fmt::Display>(window: tWindow, e: E) -> String {
     log::error!("{}", e);
     window.emit("error", e.to_string()).unwrap(); e.to_string()
 }
-
-#[tauri::command]
-fn is_admin() -> bool { unsafe {
-    let mut sid: PSID = null_mut();
-    let mut nt_authority = SID_IDENTIFIER_AUTHORITY { Value: [0, 0, 0, 0, 0, 5] };
-    let result = AllocateAndInitializeSid(
-        &mut nt_authority as *mut _ ,
-        2,
-        SECURITY_BUILTIN_DOMAIN_RID,
-        DOMAIN_ALIAS_RID_ADMINS,
-        0, 0, 0, 0, 0, 0,
-        &mut sid,
-    );
-    if result == 0 { return false; }
-    let mut is_member: winapi::shared::minwindef::BOOL = 0;
-    let result = CheckTokenMembership(null_mut(), sid, &mut is_member);
-    FreeSid(sid);
-    result != 0 && is_member != 0
-} }
 
 unsafe fn is_process_alive(process_name: &str) -> bool {
     let snap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
@@ -109,35 +89,22 @@ unsafe fn get_module(handle: HANDLE, module_name: &str) -> Option<MODULEENTRY32>
 unsafe fn spawn_game_process() -> Result<PROCESS_INFORMATION, String> {
     let game_path = GAME_PATH.read().unwrap();
     let command_line = "";
-    if is_admin() {
-        let process_path_c = CString::new(game_path.to_str().unwrap()).unwrap();
-        let command_line_c = CString::new(command_line).unwrap().into_raw() as *mut c_char;
-        let process_dir_c = CString::new(game_path.parent().unwrap().to_str().unwrap()).unwrap();
-        let mut si: STARTUPINFOA = mem::zeroed();
-        let mut pi: PROCESS_INFORMATION = mem::zeroed();
-        let success = CreateProcessA(
-            process_path_c.as_ptr(),
-            command_line_c,
-            null_mut(),
-            null_mut(),
-            winapi::shared::minwindef::FALSE,
-            0,
-            null_mut(),
-            process_dir_c.as_ptr(),
-            &mut si,
-            &mut pi,
-        );
-        if success == 0 { return Err(format!("CreateProcess failed ({})", GetLastError())); }
-        Ok(pi)    
-    } else {
-        Command::new("powershell.exe")
-            .current_dir(game_path.parent().unwrap())
-            .arg("Start-Process").arg("-FilePath")
-            .arg(format!("{:?}", game_path)).arg("-Verb")
-            .arg("RunAS").arg("-ArgumentList")
-            .arg(command_line).spawn().unwrap();
-        Ok(mem::zeroed())
-    }
+    let process_path_c = CString::new(game_path.to_str().unwrap()).unwrap();
+    let command_line_c = CString::new(command_line).unwrap().into_raw() as *mut c_char;
+    let process_dir_c = CString::new(game_path.parent().unwrap().to_str().unwrap()).unwrap();
+    let mut si: STARTUPINFOA = mem::zeroed();
+    let mut pi: PROCESS_INFORMATION = mem::zeroed();
+    let success = CreateProcessA(
+        process_path_c.as_ptr(),
+        command_line_c,
+        null_mut(), null_mut(),
+        winapi::shared::minwindef::FALSE,
+        0, null_mut(),
+        process_dir_c.as_ptr(),
+        &mut si, &mut pi,
+    );
+    if success == 0 { return Err(format!("CreateProcess failed ({})", GetLastError())); }
+    Ok(pi)    
 }
 
 fn emit_rp(window: tWindow, msg: String) {
@@ -154,10 +121,6 @@ async fn unlock_fps(window: tWindow) -> Result<(), String> { unsafe {
     let pi = spawn_game_process().unwrap();
     let pid = pi.dwProcessId;
     let process = pi.hProcess;
-    if pid == 0 {
-        emit_rp(window.clone(), "Done".to_string());
-        return Err("Cannot get PID, probably not running as admin".to_string()) 
-    }
     emit_rp(window.clone(), format!("PID: {}", pid));
     let h_unity_player = loop { match get_module(process, "UnityPlayer.dll") {
         Some(module) => break module,
@@ -234,7 +197,7 @@ fn main() {
             }));
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![is_admin, unlock_fps])
+        .invoke_handler(tauri::generate_handler![unlock_fps])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

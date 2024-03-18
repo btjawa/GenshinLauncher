@@ -15,7 +15,6 @@
 // Learn more about Tauri commands at https://tauri.app/v1/guides/features/command
 
 // import { invoke } from "@tauri-apps/api/tauri";
-import { invoke } from "@tauri-apps/api/tauri";
 import $ from "jquery";
 import * as data from "./scripts/data.ts";
 
@@ -30,7 +29,6 @@ export default {
         Run, Banner, Post, Setting
     },
     async mounted() {
-        invoke('is_admin').then((value: unknown) => data.setAdmin(value as boolean));
         data.bus.on("content-fetched", function(e: any) {
             $(".container").css("backgroundImage",
             `url(${(e as data.GeneralResponse<any>).data.adv?.background})`);

@@ -2,12 +2,6 @@ import mitt from 'mitt';
 
 export let bus = mitt();
 
-export let admin: boolean = false;
-
-export function setAdmin(value: boolean) {
-    admin = value;
-}
-
 import { http } from "@tauri-apps/api";
 
 http.fetch("https://sdk-static.mihoyo.com/hk4e_cn/mdk/launcher/api/content?key=eYd89JmJ&launcher_id=18&language=zh-cn")
