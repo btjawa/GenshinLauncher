@@ -12,6 +12,7 @@ button {
     transition: all 0.2s;
     background: none;
     font-size: 16px;
+    cursor: pointer;
 }
 
 .cross-split {

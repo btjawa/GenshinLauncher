@@ -12,14 +12,14 @@ extern {
 use winapi::{um::{minwinbase::STILL_ACTIVE, winnt::{HANDLE, SECURITY_BUILTIN_DOMAIN_RID, SID_IDENTIFIER_AUTHORITY,
 DOMAIN_ALIAS_RID_ADMINS, PSID}, memoryapi::{ReadProcessMemory, WriteProcessMemory},
 processthreadsapi::{CreateProcessA, GetExitCodeProcess, PROCESS_INFORMATION, STARTUPINFOA}, handleapi::CloseHandle,
-tlhelp32::{CreateToolhelp32Snapshot, Module32First, Module32Next, MODULEENTRY32, TH32CS_SNAPMODULE, PROCESSENTRY32,
-TH32CS_SNAPPROCESS, Process32First, Process32Next}, securitybaseapi::{CheckTokenMembership, AllocateAndInitializeSid, FreeSid},
+tlhelp32::{CreateToolhelp32Snapshot, MODULEENTRY32, PROCESSENTRY32, TH32CS_SNAPPROCESS, Process32First, Process32Next}, psapi::{EnumProcessModules,
+GetModuleInformation, GetModuleFileNameExW, MODULEINFO}, securitybaseapi::{CheckTokenMembership, AllocateAndInitializeSid, FreeSid},
 errhandlingapi::GetLastError, winuser::{RegisterHotKey, GetMessageW, MSG, VK_F8, UnregisterHotKey, mouse_event,
-MOUSEEVENTF_LEFTDOWN, MOUSEEVENTF_LEFTUP, WM_HOTKEY}}, shared::minwindef::{LPVOID, DWORD}, vc::vadefs::uintptr_t};
+MOUSEEVENTF_LEFTDOWN, MOUSEEVENTF_LEFTUP, WM_HOTKEY}}, shared::minwindef::{LPVOID, DWORD, HMODULE}, vc::vadefs::uintptr_t};
 
 use lazy_static::lazy_static;
-use std::{ffi::{CStr, CString}, ptr::null_mut, path::PathBuf, os::raw::c_char, mem, panic, process::Command,
-sync::{Arc, RwLock, Mutex, atomic::{AtomicBool, Ordering}}, thread::{self, sleep}, time::Duration};
+use std::{ffi::{CStr, CString, OsString}, ptr::null_mut, path::PathBuf, os::{raw::c_char, windows::ffi::OsStringExt}, mem,
+panic, process::Command, sync::{Arc, RwLock, Mutex, atomic::{AtomicBool, Ordering}}, thread::{self, sleep}, time::Duration};
 use tauri::{Manager, Window as tWindow};
 
 mod logger;
@@ -75,31 +75,40 @@ unsafe fn is_process_alive(process_name: &str) -> bool {
     false
 }
 
-unsafe fn get_module(pid: u32, module_name: &str) -> Option<MODULEENTRY32> {
-    let snap = CreateToolhelp32Snapshot(TH32CS_SNAPMODULE, pid);
-    let mut entry = MODULEENTRY32 {
-        dwSize: mem::size_of::<MODULEENTRY32>() as u32,
-        ..mem::zeroed()
-    };
-    if Module32First(snap, &mut entry) != 0 {
-        loop {
-            let current_module_name = CStr::from_ptr(entry.szModule.as_ptr()).to_str().unwrap_or("");
-            if entry.th32ProcessID == pid && current_module_name == module_name {
-                CloseHandle(snap);
-                return Some(entry);
-            }
-            if Module32Next(snap, &mut entry) == 0 {
-                break;
+unsafe fn get_module(handle: HANDLE, module_name: &str) -> Option<MODULEENTRY32> {
+    let mut modules: [HMODULE; 1024] = [null_mut(); 1024];
+    let mut needed = 0;
+    if EnumProcessModules(handle, modules.as_mut_ptr(), mem::size_of_val(&modules) as u32, &mut needed) == 0 {
+        return None;
+    }
+    let num_modules = needed as usize / mem::size_of::<HMODULE>();
+    for i in 0..num_modules {
+        let mut module_info = MODULEINFO { ..mem::zeroed() };
+        if GetModuleInformation(handle, modules[i], &mut module_info, mem::size_of::<MODULEINFO>() as u32) == 0 {
+            continue;
+        }
+        let mut module_filename = vec![0u16; 1024];
+        if GetModuleFileNameExW(handle, modules[i], module_filename.as_mut_ptr(), module_filename.len() as u32) <= 0 {
+            continue;
+        }
+        if let Some(path_str) = OsString::from_wide(&module_filename.iter()
+        .take_while(|&c| *c != 0).copied().collect::<Vec<u16>>()).to_str() {
+            if path_str.ends_with(&module_name) {
+                return Some(MODULEENTRY32 {
+                    dwSize: mem::size_of::<MODULEENTRY32>() as u32,
+                    modBaseAddr: module_info.lpBaseOfDll as *mut u8,
+                    modBaseSize: module_info.SizeOfImage,
+                    ..mem::zeroed()
+                });
             }
         }
     }
-    CloseHandle(snap);
     None
 }
 
 unsafe fn spawn_game_process() -> Result<PROCESS_INFORMATION, String> {
     let game_path = GAME_PATH.read().unwrap();
-    let command_line = "-popupwindow";
+    let command_line = "";
     if is_admin() {
         let process_path_c = CString::new(game_path.to_str().unwrap()).unwrap();
         let command_line_c = CString::new(command_line).unwrap().into_raw() as *mut c_char;
@@ -150,11 +159,11 @@ async fn unlock_fps(window: tWindow) -> Result<(), String> { unsafe {
         return Err("Cannot get PID, probably not running as admin".to_string()) 
     }
     emit_rp(window.clone(), format!("PID: {}", pid));
-    let h_unity_player = loop { match get_module(pid, "UnityPlayer.dll") {
+    let h_unity_player = loop { match get_module(process, "UnityPlayer.dll") {
         Some(module) => break module,
         None => sleep(Duration::from_millis(100)),
     } };
-    let h_user_assembly = loop { match get_module(pid, "UserAssembly.dll") {
+    let h_user_assembly = loop { match get_module(process, "UserAssembly.dll") {
         Some(module) => break module,
         None => sleep(Duration::from_millis(100)),
     } };

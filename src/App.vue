@@ -1,10 +1,11 @@
 <template>
-    <div class="container justify-center flex">
+    <div class="container justify-center align-center flex">
         <div class="left-container">
             <Banner />
             <Post />
         </div>
         <Run />
+        <Setting />
     </div>
 </template>
 
@@ -22,9 +23,11 @@ import Run from "./components/run.vue";
 import Banner from "./components/banner.vue";
 import Post from "./components/post.vue";
 
+import Setting from "./components/pages/setting.vue";
+
 export default {
     components: {
-        Run, Banner, Post
+        Run, Banner, Post, Setting
     },
     async mounted() {
         invoke('is_admin').then((value: unknown) => data.setAdmin(value as boolean));
@@ -53,17 +56,29 @@ export default {
     top: 30%;
     left: 60px;
 }
+</style>
 
+<style>
 .banner, .banner-item, .post {
     width: 430px;
-    transition: all 0.2s;
 }
 
-.banner, .post {
+.banner, .post, .page, .page-button {
     border-radius: 8px;
     background-color: rgba(55,57,68, 0.7);
     backdrop-filter: blur(18px) saturate(150%);
     box-shadow: 3px 3px 10px rgba(0,0,0, 0.7);
+    transition: all 0.2s;
 }
+
+.page-button i { font-size: 1.75rem; }
+
+.page-button {
+    padding: 8px;
+    box-sizing: border-box;
+    height: fit-content;
+}
+
+.page-button:hover { background-color: rgba(55,57,68, 0.9); }
 
 </style>

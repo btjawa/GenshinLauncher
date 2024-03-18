@@ -72,8 +72,7 @@ export default defineComponent({
 .post {
     padding: 4px 14px;
     box-sizing: border-box;
-    max-height: 272px;
-    min-height: 136px;
+    height: 136px;
     overflow: auto;
 }
 

@@ -28,7 +28,7 @@ export default defineComponent({
         onMounted(() => {
             data.bus.on('content-fetched', (resp: any) => {
                 banners.value = (resp as data.GeneralResponse<any>)
-                .data.banner.map((b: any) => ({ ...b, opacity: true }));
+                .data.banner.map((a: any) => ({ ...a, opacity: true }));
                 const li = banners.value.pop();
                 if (li) banners.value.unshift(li);
                 setInterval(() => {
@@ -65,9 +65,5 @@ export default defineComponent({
     background-repeat: no-repeat;
     background-size: cover;
     transition: transform 0.5s cubic-bezier(0,1,1,1);
-}
-
-.banner:hover {
-    background-color: rgba(55,57,68, 0.8);
 }
 </style>
