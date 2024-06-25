@@ -27,6 +27,7 @@ export default defineComponent({
         const banners = ref<data.BannerResponse[]>([]);
         onMounted(() => {
             data.bus.on('content-fetched', (resp: any) => {
+                console.log(resp)
                 banners.value = (resp as data.GeneralResponse<any>)
                 .data.banner.map((a: any) => ({ ...a, opacity: true }));
                 const li = banners.value.pop();

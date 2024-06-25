@@ -30,8 +30,10 @@ export default {
     },
     async mounted() {
         data.bus.on("content-fetched", function(e: any) {
-            $(".container").css("backgroundImage",
-            `url(${(e as data.GeneralResponse<any>).data.adv?.background})`);
+            if ((e as data.GeneralResponse<any>).data.adv?.background) {
+                $(".container").css("backgroundImage",
+                `url(${(e as data.GeneralResponse<any>).data.adv?.background})`);
+            }
         });
     }
 }

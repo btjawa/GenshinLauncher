@@ -1,9 +1,4 @@
 fn main() {
-    cc::Build::new()
-        .cpp(true)
-        .file("./src/unlock_fps/unlock_fps.cpp")
-        .include("./src/unlock_fps/unlock_fps.h")
-        .compile("unlock_fps");
     let mut windows = tauri_build::WindowsAttributes::new();
     windows = windows.app_manifest(r#"
     <assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">

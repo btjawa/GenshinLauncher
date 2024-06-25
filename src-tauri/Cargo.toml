@@ -7,16 +7,34 @@ edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[profile.release]
+panic = "abort" # Strip expensive panic clean-up logic
+codegen-units = 1 # Compile crates one after another so the compiler can optimize better
+lto = true # Enables link to optimizations
+opt-level = "z" # Optimize for binary size
+strip = true # Remove debug symbols
+
 [build-dependencies]
 tauri-build = { version = "1.5", features = [] }
-cc = "1.0.83"
 
 [dependencies]
 tauri = { version = "1.5", features = [ "http-request", "shell-open"] }
 tauri-plugin-single-instance = { git = "https://github.com/tauri-apps/plugins-workspace", branch = "v1" }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-winapi = { version = "0.3.9", features = ["everything"] }
+winapi = { version = "0.3", features = [
+    "basetsd",
+    "minwindef",
+    "errhandlingapi",
+    "handleapi",
+    "memoryapi",
+    "processthreadsapi",
+    "psapi",
+    "tlhelp32",
+    "winbase",
+    "winnt",
+    "winuser",
+] }
 tokio = { version = "1.36", features = ["full"] }
 chrono = "0.4.33"
 log4rs = "1.2.0"
